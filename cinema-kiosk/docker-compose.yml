@@ -1,0 +1,34 @@
+services:
+  updater:
+    build: ./updater
+    restart: unless-stopped
+    environment:
+      TZ: Europe/London
+      RUN_AT: "03:30"          # daily refresh time (local)
+      TIME_FORMAT: 12h         # "12h" -> 7:30pm, "24h" -> 19:30
+      # LISTING_URL: https://empire-theatre.co.uk/EmpireTheatre.dll/WhatsOn
+    volumes:
+      - slides:/data
+
+  display:
+    build: ./display
+    restart: unless-stopped
+    depends_on:
+      - updater
+    environment:
+      HOLD_SECONDS: "10"       # time each slide stays on screen
+      FADE_SECONDS: "1.0"
+      FADE_MODE: cross         # "cross" = crossfade, "black" = fade out to black then in
+    volumes:
+      - slides:/data:ro
+    devices:
+      - /dev/dri:/dev/dri      # direct access to the HDMI output
+    group_add:
+      - video
+      - render
+    # If the screen stays black or SDL reports it can't become DRM master,
+    # uncomment this (needs no desktop running on the Pi, i.e. Raspberry Pi OS Lite):
+    # privileged: true
+
+volumes:
+  slides:
