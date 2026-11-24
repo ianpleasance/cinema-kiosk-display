@@ -36,7 +36,7 @@ def main():
     updater.fetch = make_fetch()
     updater.run_update(data)
     cur = os.path.join(data, "current")
-    files = sorted(os.listdir(cur))
+    files = sorted(f for f in os.listdir(cur) if f != "manifest.json")
     print("first run:", files)
     assert len(files) == 4 and files[0].startswith("01_ghosts") and files[3].startswith("02_very-long") and files[3].endswith("_b_info.jpg"), files
     assert Image.open(os.path.join(cur, files[1])).size == (1920, 1080)
@@ -59,6 +59,18 @@ def main():
     assert os.readlink(cur) == target
     assert not [d for d in os.listdir(data) if d.startswith(".tmp-")]
     assert updater.has_images(data)
+
+    # SAVE_POSTERS off -> info slides only
+    updater.fetch = make_fetch()
+    updater.SAVE_POSTERS = False
+    try:
+        data2 = tempfile.mkdtemp()
+        updater.run_update(data2)
+        only = sorted(f for f in os.listdir(os.path.join(data2, "current")) if f != "manifest.json")
+        print("posters off:", only)
+        assert len(only) == 2 and all(f.endswith("_b_info.jpg") for f in only), only
+    finally:
+        updater.SAVE_POSTERS = True
 
     # scheduler maths
     s = updater.seconds_until_next_run()

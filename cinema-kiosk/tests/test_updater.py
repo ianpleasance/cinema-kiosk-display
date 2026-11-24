@@ -160,6 +160,14 @@ def test_time_format():
     assert DEFAULT_TIME_FORMAT == "12h"                      # the default
 
 
+def test_describe_showings():
+    d = updater.describe_showings
+    assert d([]) == "no dates"
+    assert d([("Sat 21 Nov", ["7:30pm"])]) == "1 date: Sat 21 Nov 7:30pm"
+    assert d([("Sat 21 Nov", ["7:30pm"]), ("Wed 25 Nov", ["10:30am", "2:30pm"])]) == \
+        "2 dates: Sat 21 Nov 7:30pm; Wed 25 Nov 10:30am, 2:30pm"
+
+
 def test_parse_rating():
     r = updater.parse_rating
     assert r('<img class="film-rating" src="https://x/bbfc/lrg/PG.png" alt="BBFC Rating: (PG)"/>') == "PG"
@@ -206,6 +214,106 @@ def test_times_align_and_badge():
     assert not ((a2[:, :, 0] > 150) & (a2[:, :, 1] < 80)).any()
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def _set(**kw):
+    """Temporarily override updater settings."""
+    old = {k: getattr(updater, k) for k in kw}
+    for k, v in kw.items():
+        setattr(updater, k, v)
+    try:
+        yield
+    finally:
+        for k, v in old.items():
+            setattr(updater, k, v)
+
+
+def test_colours_and_badge():
+    import numpy as np
+    with _set(TEXT_COLOUR=(255, 200, 0), BACKGROUND_COLOUR=(10, 20, 90),
+              BADGE_COLOUR=(0, 160, 0), BADGE_TEXT_COLOUR=(0, 0, 0)):
+        panel = updater.render_info_panel(640, 1080, "Hexed", [("Sat 28 Nov", ["7:30pm"])], "PG")
+        a = np.array(panel).astype(int)
+        assert tuple(a[1070, 630]) == (10, 20, 90)                      # background colour
+        cols = {tuple(c) for c in a.reshape(-1, 3)}
+        assert (255, 200, 0) in cols                                    # text colour
+        assert (0, 160, 0) in cols                                      # badge colour
+        assert (0, 0, 0) in cols                                        # badge text colour
+        assert (255, 255, 255) not in cols and (200, 16, 46) not in cols  # no old hard-coded colours
+    # poster edges use the background colour too
+    with _set(BACKGROUND_COLOUR=(10, 20, 90)):
+        im = updater.compose_slide(jpeg(600, 900, (200, 0, 0)), "X", [], "")
+        assert im.getpixel((5, 500)) == (10, 20, 90)                    # bar left of the poster
+
+
+def test_show_rating_flag():
+    import numpy as np
+
+    def red_pixels(flag):
+        with _set(SHOW_RATING=flag):
+            im = updater.compose_slide(jpeg(600, 900, (30, 90, 160)), "Wicker", [("Fri 27 Nov", ["7:30pm"])], "15")
+        a = np.array(im).astype(int)[:, 1280:]
+        return int(((a[:, :, 0] > 150) & (a[:, :, 1] < 80) & (a[:, :, 2] < 100)).sum())
+    assert red_pixels(True) > 5000
+    assert red_pixels(False) == 0
+
+
+def test_poster_width():
+    import numpy as np
+    shows = [("Fri 27 Nov", ["7:30pm"])]
+    im = updater.compose_slide(jpeg(600, 900, (0, 0, 255)), "Wicker", shows, "15")   # default: two thirds
+    a = np.array(im).astype(int)
+    white = a.min(axis=2) > 200
+    assert white[:, 1280:].any() and not white[:, :1279].any()          # text only in the right third
+    with _set(POSTER_WIDTH_PERCENT=50.0):
+        im = updater.compose_slide(jpeg(600, 900, (0, 0, 255)), "Wicker", shows, "15")
+        a = np.array(im).astype(int)
+        white = a.min(axis=2) > 200
+        assert not white[:, :950].any() and white[:, 960:].any()        # text starts at 960 now
+        px = im.getpixel((480, 540))
+        assert px[2] > 200 and px[0] < 40                               # poster centred in the left half
+        assert im.getpixel((900, 540)) == (0, 0, 0)                     # gap between poster and text
+
+
+def test_text_size_limits():
+    shows = [("Sat 28 Nov", ["7:30pm"])]
+
+    def title_height(**kw):
+        import numpy as np
+        with _set(**kw):
+            panel = updater.render_info_panel(640, 1080, "Hexed", shows, "")
+        return (lambda b: b[0][1] - b[0][0])(_bands(np.array(panel).sum(axis=2)))
+    big, small = title_height(), title_height(TITLE_SIZE_MAX=50)
+    assert big > small * 1.5, (big, small)
+    # sizes tried: largest first, always ends on the minimum
+    assert updater._sizes(88, 40)[0] == 88 and updater._sizes(88, 40)[-1] == 40
+    assert updater._sizes(51, 40)[-1] == 40 and updater._sizes(40, 40) == [40]
+    # a long title can never shrink below the minimum: it wraps instead (and stays inside the panel)
+    with _set(TITLE_SIZE_MIN=60, TITLE_SIZE_MAX=60):
+        panel = updater.render_info_panel(640, 1080, "A Very Long Title For The Foyer Screen Test", shows, "PG")
+        assert panel.size == (640, 1080)
+
+
+def test_days_ahead():
+    d = lambda films: [x for x, _ in films[0].showings]                  # noqa: E731
+    with _set(TIME_FORMAT="24h"):
+        everything = updater.parse_listing(LISTING, today="2099-11-27", days_ahead=0)
+        assert [f.id for f in everything] == ["100", "200"]
+        assert d(everything) == ["Sat 28 Nov", "Wed 2 Dec"]
+        assert d(updater.parse_listing(LISTING, today="2099-11-27", days_ahead=3)) == ["Sat 28 Nov"]
+        # 'today plus N days' is inclusive: 26th + 2 = 28th is shown
+        assert updater.parse_listing(LISTING, today="2099-11-26", days_ahead=2)[0].showings
+        # one day short -> that event is dropped; the one with no showings data stays (fallback page)
+        assert [f.id for f in updater.parse_listing(LISTING, today="2099-11-26", days_ahead=1)] == ["200"]
+        # everything already past -> dropped as well
+        assert [f.id for f in updater.parse_listing(LISTING, today="2099-12-03")] == ["200"]
+        # the DAYS_AHEAD setting is the default
+        with _set(DAYS_AHEAD=3):
+            assert d(updater.parse_listing(LISTING, today="2099-11-27")) == ["Sat 28 Nov"]
+
+
 def test_compose():
     out = tempfile.mkdtemp()
     cases = {
@@ -235,6 +343,12 @@ if __name__ == "__main__":
     test_entities_end_to_end()
     test_parse()
     test_time_format()
+    test_describe_showings()
+    test_colours_and_badge()
+    test_show_rating_flag()
+    test_poster_width()
+    test_text_size_limits()
+    test_days_ahead()
     test_parse_rating()
     test_times_align_and_badge()
     print("parse ok")

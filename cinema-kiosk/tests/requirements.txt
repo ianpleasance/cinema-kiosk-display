@@ -1,0 +1,9 @@
+# Needed to run the tests on your own machine (not needed on the Pi):
+#   pip install -r tests/requirements.txt
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+Pillow>=10.0
+tzdata
+numpy
+PyYAML

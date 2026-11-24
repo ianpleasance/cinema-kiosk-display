@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     DATA_DIR=/data
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends fonts-dejavu-core \
+ && apt-get install -y --no-install-recommends fonts-dejavu-core ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt

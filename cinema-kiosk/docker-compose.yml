@@ -1,34 +1,38 @@
+# Keep container logs small so they can't fill the SD card (3 files x 10 MB per container).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   updater:
     build: ./updater
     restart: unless-stopped
-    environment:
-      TZ: Europe/London
-      RUN_AT: "03:30"          # daily refresh time (local)
-      TIME_FORMAT: 12h         # "12h" -> 7:30pm, "24h" -> 19:30
-      # LISTING_URL: https://empire-theatre.co.uk/EmpireTheatre.dll/WhatsOn
+    logging: *default-logging
+    env_file: .env
+    # Run as the 'cinema' user (normally uid/gid 1000: check with `id cinema`) so that the
+    # files it writes can also be changed through the network share. Change it if yours differs.
+    user: "1000:1000"
     volumes:
-      - slides:/data
+      - ./slides:/data         # the rendered slides (and the archive)
+      - ./fonts:/fonts:ro      # your own fonts, if you use any (see .env)
+      - ./logs:/logs           # updater.log lives here (readable on the Pi without docker)
+      - ./static:/static:ro    # your own images, to include them in the video (see VIDEO_MODE)
+      - ./video:/video         # slideshow.mp4 / slideshow-fade.mp4 appear here
 
   display:
     build: ./display
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       - updater
-    environment:
-      HOLD_SECONDS: "10"       # time each slide stays on screen
-      FADE_SECONDS: "1.0"
-      FADE_MODE: cross         # "cross" = crossfade, "black" = fade out to black then in
+    env_file: .env
     volumes:
-      - slides:/data:ro
+      - ./slides:/data:ro
+      - ./static:/static:ro    # your own images, shown along with the film slides
     devices:
       - /dev/dri:/dev/dri      # direct access to the HDMI output
-    group_add:
-      - video
-      - render
     # If the screen stays black or SDL reports it can't become DRM master,
     # uncomment this (needs no desktop running on the Pi, i.e. Raspberry Pi OS Lite):
     # privileged: true
-
-volumes:
-  slides:
