@@ -1,4 +1,4 @@
-# Installing the Foyer Kiosk on a Raspberry Pi
+# Installing the Foyer Kiosk on a Raspberry Pi 3B+ or later
 
 This guide takes you from a blank SD card to a screen that shows the cinema's schedule by itself,
 starts on its own after a power cut, and has its image folders shared on your network. It assumes the
@@ -31,33 +31,34 @@ Contents
 - **[computer]** means: run this on your own laptop or PC.
 - **[pi]** means: run this on the Pi, in an SSH session logged in as the `cinema` user.
 - Names used below, which you can change: hostname `foyer-kiosk`, user `cinema`, project folder
-  `/home/cinema/cinema-kiosk`.
-- Only one account is used. `cinema` can use `sudo` for the set-up steps and is the account that runs
-  Docker and owns all the files, and the same name and password are used for the network shares.
+  `/home/cinema/empire-kiosk` (the `.md` guides live there) and the application folder inside it,
+  `/home/cinema/empire-kiosk/cinema-kiosk`, where `docker-compose.yml` and `.env` are.
+- Only one account is used. `cinema` can use `sudo` (without a password, set up in step 4) and is the account
+  that runs Docker and owns all the files, and the same name and password are used for the network shares.
 
 ---
 
 ## 1. What you need
 
-- **A Raspberry Pi 4 or 5** (2 GB of memory or more is plenty), or a **Pi Zero 2 W** (see below),
-  with an official power supply. A weak supply causes odd behaviour, so don't skimp.
+- **A Raspberry Pi 3B+, 4 or 5** (or a Pi 3B, 3A+, 400 or 500), with the official power supply.
+  A 3B+ has 1 GB of memory, which is enough. A weak supply causes odd behaviour (slide stutter, random
+  reboots), so don't skimp.
 - **A microSD card**, 16 GB or larger, from a reputable brand. Cards in a 24/7 kiosk wear out.
-- **A screen with HDMI**, and the right cable: micro-HDMI to HDMI for the Pi 4/5, **mini**-HDMI to
-  HDMI for the Zero 2 W.
-- **Network**: Wi-Fi with an ordinary password, or Ethernet (Pi 4/5). Wi-Fi that needs a login page in a
-  browser ("captive portal") or a company-style login (802.1X) won't work for an unattended device.
+- **A screen with HDMI**, and the right cable: a standard HDMI cable for the Pi 3, or micro-HDMI to
+  HDMI for the Pi 4 and 5.
+- **Network**: Wi-Fi with an ordinary password, or Ethernet (more reliable, if there is a socket
+  nearby). Wi-Fi that needs a login page in a browser ("captive portal") or a company-style login
+  (802.1X) won't work for an unattended device. The Pi 3B+ and Pi 4/5 handle both 2.4 GHz and 5 GHz Wi-Fi.
 - **A computer** to flash the card and to connect to the Pi, with an SD card reader.
-- **A copy of this project**, from your Git repository or as a `.tar.gz` file.
+- **A copy of this project**: the `.tar.gz` file it came in, or your Git repository.
 - Your Wi-Fi network name (SSID) and password, plus those of a backup network if you have one.
 
-**Using a Raspberry Pi Zero 2 W?** It can run this, with some differences. This project has been
-tested on a PC, not on a Zero, so watch the first few slides carefully.
-
-- It has **512 MB of memory** and no Ethernet port. The first Docker build is slow and can run out of
-  memory; step 4 shows how to add swap. Once built it needs far less.
-- Wi-Fi is **2.4 GHz only**, so the networks you use must offer 2.4 GHz.
-- Use the **64-bit** Raspberry Pi OS Lite, as for the other models.
-- If fades stutter, try `FADE_MODE=black` (a simpler fade) and leave `VIDEO_MODE=none`.
+> **Not supported: the original Raspberry Pi Zero, Zero W and Pi 1.** They have an old ARMv6 processor.
+> Docker does not run on them (its programs stop with `Illegal instruction`), and they are far too slow
+> for a 1080p fading slideshow. The **Zero 2 W** is a different, newer board and is not covered by this
+> guide (512 MB of memory is tight). Check your board before you start: on the Pi run
+> `tr -d '\0' < /proc/device-tree/model; echo` (it should say *Pi 3*, *Pi 4* or *Pi 5*) and `uname -m`
+> (it must **not** say `armv6l`).
 
 ## 2. Flash the SD card
 
@@ -67,7 +68,9 @@ sets the hostname, user, Wi-Fi and SSH before the Pi first starts.
 1. **[computer]** Install [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and open it.
 2. Choose your **Device** (Pi model), then the **Operating system**:
    **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)**. "Lite" has no desktop, which is what we
-   want: the kiosk takes over the screen itself. Don't use a desktop version.
+   want: the kiosk takes over the screen itself. Don't use a desktop version. The 64-bit version is
+   the one Docker supports best, and it runs fine on a 3B+, 4 or 5. (The 32-bit version also exists, but
+   Docker's support for it is ending, so don't choose it.)
 3. Choose your **Storage** (the SD card). Check the size to be sure it's the right drive: everything on
    it will be erased.
 4. Fill in the **customisation** settings. Their layout differs a little between Imager versions
@@ -78,7 +81,7 @@ sets the hostname, user, Wi-Fi and SSH before the Pi first starts.
    |---|---|
    | **Hostname** | `foyer-kiosk` (you'll reach the Pi as `foyer-kiosk.local`) |
    | **Username** | `cinema` |
-   | **Password** | a strong password for `cinema`. You'll use it to log in, for `sudo`, and for the network shares. |
+   | **Password** | a strong password for `cinema`. You'll use it to log in and for the network shares. |
    | **Wi-Fi** | your network's name and password, and the **Wi-Fi country** (`GB` for the UK). Tick "hidden network" only if it is hidden. Skip Wi-Fi if you'll use Ethernet. |
    | **Locale** | time zone `Europe/London`, keyboard layout `gb` |
    | **SSH** | **enable** it. Choose password login, or paste your public key if you have one (better; see [step 3](#3-first-boot-and-login)). |
@@ -86,7 +89,7 @@ sets the hostname, user, Wi-Fi and SSH before the Pi first starts.
    You can only enter one Wi-Fi network here. The backup network is added in [step 5](#5-wi-fi-add-a-backup-network).
 5. Write the card. Wait for it to finish and verify, then remove it.
 6. Put the card in the Pi, connect the screen (and the network cable if you use one), and power it on.
-   The first boot takes a minute or two (a Zero 2 W can take several), because it expands the
+   The first boot takes a minute or two, because it expands the
    filesystem and sets everything up.
 
 **If you skipped the customisation settings**, or they weren't applied (Imager sometimes doesn't apply
@@ -148,6 +151,22 @@ If you can't connect, see [step 14](#14-if-something-goes-wrong-during-installat
 
 All **[pi]**. Each of these is quick; the reboot at the end applies them together.
 
+**Let `cinema` use `sudo` without typing a password.** Raspberry Pi OS often sets this up already for the
+first user; this makes sure, and it saves typing the password for every command in this guide and for
+scripted maintenance. Keep your SSH session open until the check passes:
+
+```bash
+echo 'cinema ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/010_cinema-nopasswd
+sudo chmod 0440 /etc/sudoers.d/010_cinema-nopasswd
+sudo visudo -cf /etc/sudoers.d/010_cinema-nopasswd      # must say: parsed OK
+sudo -k; sudo -n true && echo "passwordless sudo works"
+```
+
+If the `visudo` check reports an error, delete the file (`sudo rm /etc/sudoers.d/010_cinema-nopasswd`) and
+try again; a broken sudoers file can lock you out of `sudo`. Note this makes anyone who can log in as
+`cinema` an administrator without a further password, which is already true of Docker group members
+(step 6), so protect the login: use an SSH key and a strong password, and don't expose SSH to the internet.
+
 **Update the system and install tools:**
 
 ```bash
@@ -192,8 +211,8 @@ sudo sed -i '1 s/$/ video=HDMI-A-1:1920x1080@60 consoleblank=0/' /boot/firmware/
 cat /boot/firmware/cmdline.txt                # still one line, ending in the two new settings
 ```
 
-`HDMI-A-1` is the first HDMI port (the one nearest the power connector on a Pi 4 or 5; the only one on
-a Zero 2 W). Use `HDMI-A-2` if the screen is on the second port. If the Pi won't start afterwards,
+`HDMI-A-1` is the first HDMI port (the only one on a Pi 3, and the one nearest the power connector on a
+Pi 4 or 5). Use `HDMI-A-2` if the screen is on the second port. If the Pi won't start afterwards,
 put the card in your computer and restore `cmdline.txt.bak` over `cmdline.txt`.
 
 **Hardware watchdog (recommended).** The Pi has a hardware watchdog: a timer that resets the board if the
@@ -216,16 +235,25 @@ the same for a shutdown or reboot that gets stuck. (Some Raspberry Pi OS release
 `40-rpi-enable-watchdog.conf` in `/usr/lib/systemd/system.conf.d/`; the file above is read later, so its
 values win.) It is checked after the reboot below.
 
-**Zero 2 W only: make sure there's swap**, because the first Docker build needs more than 512 MB:
+**If the Docker build is "Killed" (a 1 GB Pi 3B+ only, unlikely).** The Pi already has compressed swap in
+memory (zram, from the `rpi-swap` package; check with `free -h`). Only if the build in
+[step 10](#10-build-and-run) is "Killed" or the Pi freezes, add a real 1 GB swap file (this wears the SD card a
+little, so it's a fix for a problem rather than a default):
 
 ```bash
-free -h                            # look at the "Swap" line; it should be 512 MB or more
-sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=1024/' /etc/dphys-swapfile
-sudo systemctl restart dphys-swapfile
+sudo mkdir -p /etc/rpi/swap.conf.d
+sudo tee /etc/rpi/swap.conf.d/80-swapfile.conf <<'EOT'
+[Main]
+Mechanism=swapfile
+
+[File]
+FixedSizeMiB=1024
+EOT
+sudo reboot
 ```
 
-If `/etc/dphys-swapfile` doesn't exist on your release, swap is handled differently; skip this unless
-the build in [step 10](#10-build-and-run) is killed for lack of memory.
+After the reboot, `cat /proc/swaps` should list `/var/swap`. To go back to the default, delete that file
+and reboot again.
 
 **Optional: automatic security updates.** To have the Pi install Debian's security fixes by itself:
 `sudo apt install -y unattended-upgrades`, then `sudo dpkg-reconfigure -plow unattended-upgrades` and
@@ -283,7 +311,6 @@ sudo nmcli connection add type wifi con-name "Cinema-Backup" ssid "BackupNetwork
 - A network doesn't need to be in range when you add it, so you can set up another site's Wi-Fi in advance.
 - For a hidden network add `802-11-wireless.hidden yes` to the command. Add as many networks as you like.
 - A network cable is used in preference to Wi-Fi whenever it's plugged in.
-- Zero 2 W: only 2.4 GHz networks can be used.
 
 Useful commands:
 
@@ -303,8 +330,20 @@ connection. An Ethernet cable, or a keyboard on the Pi, is a good way back in.
 
 ## 6. Install Docker
 
-**[pi]** Use Docker's official install script. It adds Docker's repository, so you get updates through
-the normal `apt` upgrades. Downloading it first lets you read it before running it:
+First check the board and the operating system (**[pi]**):
+
+```bash
+tr -d '\0' < /proc/device-tree/model; echo   # e.g. "Raspberry Pi 3 Model B Plus Rev 1.3"
+uname -m                             # aarch64 is what you want; armv6l means Docker will not work
+dpkg --print-architecture            # arm64 = 64-bit (good)
+```
+
+If `uname -m` says `armv6l`, **stop**: this is an original Pi Zero, Zero W or Pi 1, which Docker does not
+support. If `dpkg --print-architecture` says `armhf` (a 32-bit install), re-flash with the **64-bit** Lite
+image ([step 2](#2-flash-the-sd-card)): Docker is ending its support for 32-bit Raspberry Pi OS.
+
+Use Docker's official install script. It adds Docker's repository, so you get updates through the normal
+`apt` upgrades. Downloading it first lets you read it before running it:
 
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
@@ -346,8 +385,8 @@ hasn't applied: log out and in again.
 
 ```bash
 cd ~
-git clone <your-repo-url> cinema-kiosk
-cd cinema-kiosk
+git clone <your-repo-url> empire-kiosk
+cd empire-kiosk/cinema-kiosk
 ```
 
 For a private repository, make a read-only **deploy key** for the Pi: run
@@ -361,10 +400,14 @@ your repository's deploy keys, then clone using the `git@...` address.
 scp cinema-kiosk.tar.gz cinema@foyer-kiosk.local:~
 
 # [pi]
-cd ~ && tar xzf cinema-kiosk.tar.gz && cd cinema-kiosk
+mkdir -p ~/empire-kiosk && tar xzf ~/empire-kiosk/cinema-kiosk.tar.gz -C ~/empire-kiosk
+cd ~/empire-kiosk/cinema-kiosk
 ```
 
-Everything from here is run from inside `~/cinema-kiosk`. Check that the folders the containers use are
+The tarball puts the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) in `~/empire-kiosk`
+and everything else in `~/empire-kiosk/cinema-kiosk`.
+
+Everything from here is run from inside `~/empire-kiosk/cinema-kiosk`. Check that the folders the containers use are
 there, and that the Pi's `cinema` user has the user ID the containers expect:
 
 ```bash
@@ -384,8 +427,8 @@ file sharing for Linux) and the same `cinema` user name and password.
 
 | Share | Folder on the Pi | What it's for |
 |---|---|---|
-| `static` | `~/cinema-kiosk/static` | **Your own images** (offers, house rules, sponsors). Add and remove them here. |
-| `slides` | `~/cinema-kiosk/slides` | The **rendered film slides** made by the updater (read it, or remove a slide you don't want). |
+| `static` | `~/empire-kiosk/cinema-kiosk/static` | **Your own images** (offers, house rules, sponsors). Add and remove them here. |
+| `slides` | `~/empire-kiosk/cinema-kiosk/slides` | The **rendered film slides** made by the updater (read it, or remove a slide you don't want). |
 
 1. **[pi]** Install Samba. If it asks about WINS settings from DHCP, answer **No**:
 
@@ -408,7 +451,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    [static]
       comment = Cinema kiosk - your own images
-      path = /home/cinema/cinema-kiosk/static
+      path = /home/cinema/empire-kiosk/cinema-kiosk/static
       browseable = yes
       read only = no
       valid users = cinema
@@ -419,7 +462,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    [slides]
       comment = Cinema kiosk - rendered slides
-      path = /home/cinema/cinema-kiosk/slides
+      path = /home/cinema/empire-kiosk/cinema-kiosk/slides
       browseable = yes
       read only = no
       valid users = cinema
@@ -432,7 +475,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    Optionally, a third, **read-only** share for the slideshow video (see `VIDEO_MODE` in
    [USAGE.md](USAGE.md#slideshow-video)): the same lines with the heading `[video]`, `path =
-   /home/cinema/cinema-kiosk/video` and `read only = yes`.
+   /home/cinema/empire-kiosk/cinema-kiosk/video` and `read only = yes`.
 
 4. **[pi]** Check the file for mistakes, then start Samba and have it start at every boot:
 
@@ -468,7 +511,7 @@ How it behaves:
 
 All settings are in one file, `.env`. It's a hidden file (its name starts with a dot); `ls -a` lists it.
 
-**[pi]**, in `~/cinema-kiosk`:
+**[pi]**, in `~/empire-kiosk/cinema-kiosk`:
 
 ```bash
 nano .env
@@ -498,8 +541,7 @@ file. Save with Ctrl+O, Enter, then exit with Ctrl+X.
 docker compose up -d --build
 ```
 
-The first build downloads base images and packages and takes several minutes on a Pi 4/5 (much longer on
-a Zero 2 W). Then watch what the updater is doing:
+The first build downloads base images and packages and takes several minutes on a Pi 4/5 (a little longer on a 3B+). Then watch what the updater is doing:
 
 ```bash
 docker compose logs -f
@@ -544,7 +586,7 @@ Now check that a power cut behaves:
 sudo reboot
 ```
 
-After a minute or two (longer on a Zero 2 W) the slideshow should be back on its own, without anyone
+After a minute or two the slideshow should be back on its own, without anyone
 logging in. If it isn't, see [step 14](#14-if-something-goes-wrong-during-installation) and the troubleshooting
 section of [USAGE.md](USAGE.md#logs-and-troubleshooting).
 
@@ -578,7 +620,7 @@ to *your* Tailscale account can reach the Pi.
 Read the [CHANGELOG](CHANGELOG.md) first, then **[pi]**:
 
 ```bash
-cd ~/cinema-kiosk
+cd ~/empire-kiosk/cinema-kiosk
 cat VERSION                                  # the version you have now
 git pull --rebase --autostash                # your edits to .env are kept
 docker compose up -d --build
@@ -600,17 +642,18 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 
 | Symptom | Likely cause and fix |
 |---|---|
-| **`ping foyer-kiosk.local` finds nothing** | Give it a few minutes (a Zero 2 W is slow). Check the Pi's green light flickers, then look for it in the router's device list and use its IP address. If Wi-Fi was set up in Imager, check the password and country; try Ethernet. Windows computers without Bonjour may not resolve `.local`: use the IP address. |
+| **`ping foyer-kiosk.local` finds nothing** | Give it a few minutes (a first boot can be slow). Check the Pi's green light flickers, then look for it in the router's device list and use its IP address. If Wi-Fi was set up in Imager, check the password and country; try Ethernet. Windows computers without Bonjour may not resolve `.local`: use the IP address. |
 | **`Connection refused` when running `ssh`** | SSH isn't enabled: re-flash with SSH ticked, or create the empty `ssh` file on `bootfs` ([step 2](#2-flash-the-sd-card)). |
 | **`Permission denied` at the password** | A wrong password, or Imager's user settings weren't applied so there is no `cinema` user. Re-flash and check the settings, or use the `ssh` and `userconf.txt` method in [step 2](#2-flash-the-sd-card). |
 | **Host key changed warning** | You've re-flashed a card with the same name. Run `ssh-keygen -R foyer-kiosk.local` on your computer, then connect again. |
-| **Pi never joins the Wi-Fi** | Wrong password or Wi-Fi country, a captive-portal network, or (Zero 2 W) a 5 GHz-only network. Use Ethernet and fix it with `nmcli` ([step 5](#5-wi-fi-add-a-backup-network)). |
+| **Pi never joins the Wi-Fi** | Wrong password or Wi-Fi country, or a captive-portal network. Use Ethernet and fix it with `nmcli` ([step 5](#5-wi-fi-add-a-backup-network)). |
+| **`Illegal instruction` when running `docker`** | The Pi has an ARMv6 processor (original Zero, Zero W or Pi 1), which Docker doesn't support. Confirm with `uname -m` (`armv6l`) and use a Pi 3B+, 4 or 5 instead. The same SD card works in the new board. |
 | **`docker: permission denied`** | `cinema` isn't in the `docker` group yet, or you haven't logged in again since adding it ([step 6](#6-install-docker)). |
-| **The build is "Killed" or the Pi freezes (Zero 2 W)** | Out of memory: add swap ([step 4](#4-set-up-the-base-system)) and run the build again. |
+| **The build is "Killed" or the Pi freezes** | Out of memory: add swap ([step 4](#4-set-up-the-base-system)) and run the build again. |
 | **Screen stays black but containers are "Up"** | Normal for the first few minutes until the first update completes. If it persists: `docker compose logs --tail 50`. If slides exist (`ls slides/current`) it's a display-driver problem: check `/dev/dri` exists, that you're on Raspberry Pi OS **Lite**, and that `dtoverlay=vc4-kms-v3d` is set, or uncomment `privileged: true` in `docker-compose.yml` and run `docker compose up -d`. |
 | **`no such file or directory` for `/dev/dri`** | You're not on a Pi with KMS enabled (or you're on a PC or Chromebook). Start only the updater: `docker compose up -d updater`. |
 | **Can't open the network share** | Run `systemctl status smbd` and `testparm -s`. Check the user name is `cinema` and the password is the one set with `smbpasswd` (not necessarily the login password). Try the IP address instead of the name. On Windows, an old saved login can interfere: Credential Manager, remove the entry for the Pi. |
-| **Can open the share but can't save or delete files** | The folder's owner isn't `cinema` (if you ran `docker compose up` as `sudo`, or before the folders existed, Docker may have created them as root). Fix with `sudo chown -R cinema:cinema ~/cinema-kiosk/slides ~/cinema-kiosk/static ~/cinema-kiosk/logs ~/cinema-kiosk/video`, then `docker compose up -d`. |
+| **Can open the share but can't save or delete files** | The folder's owner isn't `cinema` (if you ran `docker compose up` as `sudo`, or before the folders existed, Docker may have created them as root). Fix with `sudo chown -R cinema:cinema ~/empire-kiosk/cinema-kiosk/slides ~/empire-kiosk/cinema-kiosk/static ~/empire-kiosk/cinema-kiosk/logs ~/empire-kiosk/cinema-kiosk/video`, then `docker compose up -d`. |
 | **Updater says `Permission denied` writing to `/data`, `/logs` or `/video`** | The same thing: those folders aren't writable by the user in `docker-compose.yml` (`1000:1000`). Run the `chown` above and check `id cinema`. |
 
 ## 15. Maintenance, backups and removal
@@ -620,7 +663,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 - **Refresh the container base images** now and then, to pick up security fixes:
 
   ```bash
-  cd ~/cinema-kiosk
+  cd ~/empire-kiosk/cinema-kiosk
   docker compose build --pull
   docker compose up -d
   docker image prune -f
@@ -631,7 +674,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
   pre-made card.
 - **Back up what's yours**: `.env`, the `static` folder and the `fonts` folder. Everything else is
   rebuilt from the code and the website. (Easiest is to copy them off through the network shares, or with
-  `scp -r cinema@foyer-kiosk.local:~/cinema-kiosk/static .` from your computer.)
+  `scp -r cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/static .` from your computer.)
 - **Disk space**: the slides take a few MB per film and the updater keeps only the current and previous
   set. The `slides/archive` folder grows slowly and is never deleted automatically; see
   [USAGE.md](USAGE.md#rendered-slides-and-the-archive). Check space with `df -h /`, and
@@ -641,7 +684,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 are kept):
 
 ```bash
-cd ~/cinema-kiosk
+cd ~/empire-kiosk/cinema-kiosk
 docker compose down
 rm -rf slides/gen-* slides/current slides/archive
 docker compose up -d --build        # the first update runs straight away
@@ -650,8 +693,8 @@ docker compose up -d --build        # the first update runs straight away
 **Removing the kiosk completely:**
 
 ```bash
-cd ~/cinema-kiosk && docker compose down --rmi all
-cd ~ && rm -rf cinema-kiosk
+cd ~/empire-kiosk/cinema-kiosk && docker compose down --rmi all
+cd ~ && rm -rf empire-kiosk
 ```
 
 Then remove the two shares from `/etc/samba/smb.conf` (the `[static]` and `[slides]` blocks) and run

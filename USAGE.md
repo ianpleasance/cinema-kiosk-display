@@ -37,7 +37,7 @@ blank, and if the website is down or looks wrong the old slides stay up and it t
 
 ```bash
 ssh cinema@foyer-kiosk.local
-cd ~/cinema-kiosk
+cd ~/empire-kiosk/cinema-kiosk
 ```
 
 | Folder or file | What it is |
@@ -52,7 +52,7 @@ cd ~/cinema-kiosk
 
 ## Everyday commands
 
-Run in `~/cinema-kiosk`.
+Run in `~/empire-kiosk/cinema-kiosk`.
 
 | To do this | Run |
 |---|---|
@@ -191,8 +191,8 @@ Anything you put in the `static` folder is shown along with the film slides: hou
 
 - **Over the network** (easiest): open `\\foyer-kiosk\static` on Windows, or `smb://foyer-kiosk.local/static` on
   a Mac, log in as `cinema`, and drag the files in. See [INSTALL.md, step 8](INSTALL.md#8-share-the-image-folders-on-the-network).
-- **From a terminal on your computer:** `scp offers.png cinema@foyer-kiosk.local:~/cinema-kiosk/static/`
-- **On the Pi:** copy into `~/cinema-kiosk/static/`.
+- **From a terminal on your computer:** `scp offers.png cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/static/`
+- **On the Pi:** copy into `~/empire-kiosk/cinema-kiosk/static/`.
 
 **Rules and tips**
 
@@ -268,13 +268,13 @@ Set `VIDEO_MODE` in `.env` and the updater also writes an mp4 of the slideshow t
 Apply it with `docker compose up -d`. The video shows the film slides with your `static` images placed by
 `STATIC_POSITION`, always in schedule order (`SHUFFLE` is ignored), at `SCREEN_W` x `SCREEN_H`, 25 frames
 per second. Fetch the file from `video/` through the network (`\\foyer-kiosk\video`, if you added that share)
-or with `scp cinema@foyer-kiosk.local:~/cinema-kiosk/video/slideshow.mp4 .`
+or with `scp cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/video/slideshow.mp4 .`
 
 - It is **only remade when it needs to be**: when the slides (their content or order), your static images,
   or the settings that affect it change. Changing `FADE_SECONDS` only remakes the fading video. Most
   refreshes change nothing, so they cost nothing.
 - A video you stop asking for (by changing `VIDEO_MODE`) is **deleted**.
-- Making the video takes minutes on a Pi (longer on a Zero 2 W) at low priority, so the display isn't
+- Making the video takes minutes on a Pi at low priority, so the display isn't
   disturbed; the next scheduled refresh check is delayed by that long. If a video fails to make, it's
   logged (`Video: ...`) and the slides are unaffected.
 
@@ -354,14 +354,14 @@ docker compose exec updater python -c "import requests; print(requests.get('http
 | **Text too small or too large** | Adjust `TITLE_SIZE_MAX/MIN` and `DATE_SIZE_MAX/MIN`, then refresh |
 | **A static image doesn't appear** | It must be a jpg, png, webp, gif or bmp, directly inside `static/` (not a sub-folder or starting with a dot). `ls static` on the Pi shows what it sees |
 | **A deleted film is still on screen** | Slides in `slides/current` stay until the next refresh. Refresh now |
-| **Fades stutter** | `vcgencmd get_throttled` (power or heat?), the display log mentioning `software blit`, and whether the screen is running at 4K. On a Zero 2 W try `FADE_MODE=black` |
+| **Fades stutter** | `vcgencmd get_throttled` (power or heat?), the display log mentioning `software blit`, and whether the screen is running at 4K. Try `FADE_MODE=black` |
 | **Can't open the network share, or can't save into it** | See [INSTALL.md, step 14](INSTALL.md#14-if-something-goes-wrong-during-installation) (password, `smbd` running, folder ownership) |
 | **The Pi is unreachable** | Check power and the network. If both Wi-Fi networks are out, plug in Ethernet (Pi 4/5). Then `ssh` in and check `nmcli`. If it's frozen, the watchdog should reboot it; otherwise power-cycle it |
 | **Disk full** | `df -h /`, then clear the `slides/archive` and `docker system df` / `docker image prune -f` |
 
 ### Reporting a problem
 
-When asking for help, include the output of these (in `~/cinema-kiosk`):
+When asking for help, include the output of these (in `~/empire-kiosk/cinema-kiosk`):
 
 ```bash
 cat VERSION
@@ -377,7 +377,7 @@ Leave out passwords and anything private.
 ## Updating the software
 
 ```bash
-cd ~/cinema-kiosk
+cd ~/empire-kiosk/cinema-kiosk
 cat VERSION                                  # the version you have now
 git pull --rebase --autostash                # your edits to .env are kept
 docker compose up -d --build

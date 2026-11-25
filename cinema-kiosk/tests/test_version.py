@@ -4,6 +4,7 @@ import re
 import sys
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
+DOCROOT = os.path.join(ROOT, "..")          # guides live beside the application folder
 sys.path.insert(0, os.path.join(ROOT, "updater"))
 sys.path.insert(0, os.path.join(ROOT, "display"))
 import display  # noqa: E402
@@ -27,7 +28,7 @@ def test_code_matches_version_file():
 
 
 def test_changelog_matches_version():
-    text = open(os.path.join(ROOT, "CHANGELOG.md")).read()
+    text = open(os.path.join(DOCROOT, "CHANGELOG.md")).read()
     assert "## [Unreleased]" in text
     released = re.findall(rf"^## \[({SEMVER})\] - \d{{4}}-\d{{2}}-\d{{2}}$", text, re.M)
     assert released, "CHANGELOG.md has no released version heading"
@@ -36,7 +37,7 @@ def test_changelog_matches_version():
 
 
 def test_readme_shows_version():
-    readme = open(os.path.join(ROOT, "README.md")).read()
+    readme = open(os.path.join(DOCROOT, "README.md")).read()
     assert f"**Version {version_file()}**" in readme, "README's Version line is out of date"
 
 

@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/). The current version is in the [`VERSION`](VERSION) file.
+[Semantic Versioning](https://semver.org/). The current version is in the [`VERSION`](cinema-kiosk/VERSION) file.
 
 ## [Unreleased]
 
@@ -12,6 +12,12 @@ First release.
 
 ### Added
 
+- **Raspberry Pi 3B+ or later**: the install guide is written for a Pi 3B+, 4 or 5 running Raspberry Pi OS
+  Lite (64-bit) with Docker from its install script, and warns that the original Pi Zero, Zero W and
+  Pi 1 (ARMv6) cannot run Docker. The updater image is built from Debian packages instead of pip, so it
+  builds on 32-bit and 64-bit alike. The guide also sets up passwordless `sudo` for `cinema`.
+- **Package layout**: the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) are at the top of
+  the package and the application is in a `cinema-kiosk/` folder beside them.
 - **Several refresh times a day**: `RUN_AT` accepts a list such as `0330,1230,1530,2030`, so
   matinee and evening shows disappear soon after they have started.
 - **Archive**: images of films that have dropped off the schedule are copied to
@@ -26,7 +32,7 @@ First release.
   settings and your static images. It is only remade when the slides or related settings change.
 - **Install guide** (`INSTALL.md`) rewritten for a headless install from a blank SD card: flashing with
   Imager (hostname, a `cinema` user, Wi-Fi, SSH), base system set-up (time zone, Wi-Fi power saving off,
-  1080p output, hardware watchdog, swap for the Pi Zero 2 W), a backup Wi-Fi network, Docker, and
+  1080p output, hardware watchdog, an optional swap file), a backup Wi-Fi network, Docker, and
   optional Tailscale.
 - **Network shares**: the `static` and `slides` folders can be shared read/write with Samba, using the
   `cinema` user and password, so images can be added and checked from a PC or Mac.

@@ -1,3 +1,5 @@
+# For running the updater or the tests outside Docker. The Docker image installs the same
+# libraries from Debian packages instead (see Dockerfile), so it also builds on 32-bit Raspberry Pi OS.
 requests>=2.31
 beautifulsoup4>=4.12
 lxml>=5.0

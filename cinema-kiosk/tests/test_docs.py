@@ -3,11 +3,16 @@ import os
 import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
+DOCROOT = os.path.join(ROOT, "..")            # the guides sit beside the cinema-kiosk/ application folder
 DOCS = ["README.md", "INSTALL.md", "USAGE.md", "CHANGELOG.md"]
 
 
+def where(name):
+    return os.path.join(DOCROOT if name in DOCS else ROOT, name)
+
+
 def read(name):
-    return open(os.path.join(ROOT, name), encoding="utf-8").read()
+    return open(where(name), encoding="utf-8").read()
 
 
 def env_keys():
@@ -41,14 +46,14 @@ def test_install_covers_the_required_topics():
     install = read("INSTALL.md")
     for needle in ("Raspberry Pi Imager", "cinema", "ssh", "nmcli", "autoconnect-priority", "docker compose up -d --build",
                    "usermod -aG docker", "smbpasswd -a cinema", "[static]", "[slides]", "testparm", "RuntimeWatchdogSec",
-                   "tailscale", "wifi.powersave"):
+                   "tailscale", "wifi.powersave", "NOPASSWD", "64-bit", "empire-kiosk", "Illegal instruction"):
         assert needle in install, f"INSTALL.md no longer mentions {needle!r}"
     assert "kiosk@" not in install and "sudo -iu" not in install        # one user only: cinema
 
 
 def test_docs_exist_and_are_not_empty():
     for name in DOCS + ["VERSION", ".env", "docker-compose.yml", ".gitignore"]:
-        assert os.path.getsize(os.path.join(ROOT, name)) > 0, name
+        assert os.path.getsize(where(name)) > 0, name
 
 
 def test_relative_links_resolve():
@@ -58,7 +63,7 @@ def test_relative_links_resolve():
                 continue
             path, _, anchor = target.partition("#")
             file = path or doc
-            assert os.path.exists(os.path.join(ROOT, file)), f"{doc}: broken link to {target}"
+            assert os.path.exists(os.path.normpath(os.path.join(DOCROOT, file))), f"{doc}: broken link to {target}"
             if anchor and file.endswith(".md"):
                 assert anchor in anchors(file), f"{doc}: no heading for anchor #{anchor} in {file}"
 
