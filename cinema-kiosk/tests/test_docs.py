@@ -46,7 +46,7 @@ def test_install_covers_the_required_topics():
     install = read("INSTALL.md")
     for needle in ("Raspberry Pi Imager", "cinema", "ssh", "nmcli", "autoconnect-priority", "docker compose up -d --build",
                    "usermod -aG docker", "smbpasswd -a cinema", "[static]", "[slides]", "testparm", "RuntimeWatchdogSec",
-                   "tailscale", "wifi.powersave", "NOPASSWD", "64-bit", "empire-kiosk", "Illegal instruction"):
+                   "tailscale", "wifi.powersave", "NOPASSWD", "64-bit", "cinema-kiosk/cinema-kiosk", "ianpleasance/cinema-kiosk-display", "modetest", "Illegal instruction"):
         assert needle in install, f"INSTALL.md no longer mentions {needle!r}"
     assert "kiosk@" not in install and "sudo -iu" not in install        # one user only: cinema
 

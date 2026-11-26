@@ -37,7 +37,7 @@ blank, and if the website is down or looks wrong the old slides stay up and it t
 
 ```bash
 ssh cinema@foyer-kiosk.local
-cd ~/empire-kiosk/cinema-kiosk
+cd ~/cinema-kiosk/cinema-kiosk
 ```
 
 | Folder or file | What it is |
@@ -52,7 +52,7 @@ cd ~/empire-kiosk/cinema-kiosk
 
 ## Everyday commands
 
-Run in `~/empire-kiosk/cinema-kiosk`.
+Run in `~/cinema-kiosk/cinema-kiosk`.
 
 | To do this | Run |
 |---|---|
@@ -105,7 +105,7 @@ Which settings need the extra refresh:
 
 | You changed... | Then do |
 |---|---|
-| `HOLD_SECONDS`, `FADE_SECONDS`, `FADE_MODE`, `SHUFFLE`, `STATIC_POSITION` | `up -d` only |
+| `HOLD_SECONDS`, `FADE_SECONDS`, `FADE_MODE`, `SHUFFLE`, `STATIC_POSITION`, `DISPLAY_BACKEND` | `up -d` only |
 | `RUN_AT`, `TZ`, `RETRY_MINUTES`, `REQUEST_DELAY`, `MAX_ITEM_DROP`, `LOG_FILE` | `up -d` only; the updater then waits for the next time |
 | Anything about how slides look: colours, fonts, text sizes, `POSTER_WIDTH_PERCENT`, `SHOW_RATING`, `TIME_FORMAT`, `SAVE_POSTERS`, `SCREEN_W`, `SCREEN_H` | `up -d`, then refresh |
 | `BACKGROUND_COLOUR` | `up -d`, then refresh (it changes the slides and the display) |
@@ -164,6 +164,7 @@ A minimum larger than its maximum is ignored (the defaults are used) with a warn
 | `HOLD_SECONDS` | `10` | `0.5` or more | How long each slide stays on screen |
 | `FADE_SECONDS` | `1.0` | `0` or more | How long each fade takes. `0` cuts straight to the next slide |
 | `FADE_MODE` | `cross` | `cross` or `black` | `cross` blends one slide into the next; `black` fades out to black, then in |
+| `DISPLAY_BACKEND` | `drm` | `drm` or `sdl` | How the display draws. `drm` has the CPU write straight to the HDMI output (works on every Pi, no GPU needed); `sdl` uses SDL/pygame and GPU drawing, which gives a black screen on some Pis |
 | `SHUFFLE` | `0` | `1` or `0` | `1` shows the slides in random order (never the same one twice in a row); `0` follows the schedule's order |
 | `STATIC_POSITION` | `after` | `after`, `before`, `spread` | Where your static images go among the film slides: after them all, before them all, or spread evenly through them |
 
@@ -191,8 +192,8 @@ Anything you put in the `static` folder is shown along with the film slides: hou
 
 - **Over the network** (easiest): open `\\foyer-kiosk\static` on Windows, or `smb://foyer-kiosk.local/static` on
   a Mac, log in as `cinema`, and drag the files in. See [INSTALL.md, step 8](INSTALL.md#8-share-the-image-folders-on-the-network).
-- **From a terminal on your computer:** `scp offers.png cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/static/`
-- **On the Pi:** copy into `~/empire-kiosk/cinema-kiosk/static/`.
+- **From a terminal on your computer:** `scp offers.png cinema@foyer-kiosk.local:~/cinema-kiosk/cinema-kiosk/static/`
+- **On the Pi:** copy into `~/cinema-kiosk/cinema-kiosk/static/`.
 
 **Rules and tips**
 
@@ -268,7 +269,7 @@ Set `VIDEO_MODE` in `.env` and the updater also writes an mp4 of the slideshow t
 Apply it with `docker compose up -d`. The video shows the film slides with your `static` images placed by
 `STATIC_POSITION`, always in schedule order (`SHUFFLE` is ignored), at `SCREEN_W` x `SCREEN_H`, 25 frames
 per second. Fetch the file from `video/` through the network (`\\foyer-kiosk\video`, if you added that share)
-or with `scp cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/video/slideshow.mp4 .`
+or with `scp cinema@foyer-kiosk.local:~/cinema-kiosk/cinema-kiosk/video/slideshow.mp4 .`
 
 - It is **only remade when it needs to be**: when the slides (their content or order), your static images,
   or the settings that affect it change. Changing `FADE_SECONDS` only remakes the fading video. Most
@@ -354,14 +355,14 @@ docker compose exec updater python -c "import requests; print(requests.get('http
 | **Text too small or too large** | Adjust `TITLE_SIZE_MAX/MIN` and `DATE_SIZE_MAX/MIN`, then refresh |
 | **A static image doesn't appear** | It must be a jpg, png, webp, gif or bmp, directly inside `static/` (not a sub-folder or starting with a dot). `ls static` on the Pi shows what it sees |
 | **A deleted film is still on screen** | Slides in `slides/current` stay until the next refresh. Refresh now |
-| **Fades stutter** | `vcgencmd get_throttled` (power or heat?), the display log mentioning `software blit`, and whether the screen is running at 4K. Try `FADE_MODE=black` |
+| **Fades look choppy** | The display draws with the CPU (`DISPLAY_BACKEND=drm`), so on a Pi 3B+ fades run at roughly 10 frames a second; a Pi 4 or 5 is smoother. Slides held on screen are unaffected. Check `vcgencmd get_throttled` (power or heat?). `FADE_MODE=black` is a little lighter, and `FADE_SECONDS=0` switches slides instantly |
 | **Can't open the network share, or can't save into it** | See [INSTALL.md, step 14](INSTALL.md#14-if-something-goes-wrong-during-installation) (password, `smbd` running, folder ownership) |
 | **The Pi is unreachable** | Check power and the network. If both Wi-Fi networks are out, plug in Ethernet (Pi 4/5). Then `ssh` in and check `nmcli`. If it's frozen, the watchdog should reboot it; otherwise power-cycle it |
 | **Disk full** | `df -h /`, then clear the `slides/archive` and `docker system df` / `docker image prune -f` |
 
 ### Reporting a problem
 
-When asking for help, include the output of these (in `~/empire-kiosk/cinema-kiosk`):
+When asking for help, include the output of these (in `~/cinema-kiosk/cinema-kiosk`):
 
 ```bash
 cat VERSION
@@ -377,7 +378,7 @@ Leave out passwords and anything private.
 ## Updating the software
 
 ```bash
-cd ~/empire-kiosk/cinema-kiosk
+cd ~/cinema-kiosk/cinema-kiosk
 cat VERSION                                  # the version you have now
 git pull --rebase --autostash                # your edits to .env are kept
 docker compose up -d --build

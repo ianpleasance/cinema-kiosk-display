@@ -61,8 +61,8 @@ SD card: headless setup, a `cinema` user, two Wi-Fi networks, Docker, and networ
 image folders. [USAGE.md](USAGE.md) then explains running it.
 
 ```bash
-git clone <your-repo-url> empire-kiosk
-cd empire-kiosk/cinema-kiosk
+git clone https://github.com/ianpleasance/cinema-kiosk-display.git cinema-kiosk
+cd cinema-kiosk/cinema-kiosk
 
 # 1. (optional) look through the settings and change what you like
 nano .env
@@ -131,6 +131,7 @@ with `docker compose exec updater python updater.py --once` (or wait for the nex
 | `FADE_SECONDS` | `1.0` | Seconds each fade takes |
 | `FADE_MODE` | `cross` | `cross` = crossfade; `black` = fade out to black, then in |
 | `SHUFFLE` | `0` | `1` = random order |
+| `DISPLAY_BACKEND` | `drm` | `drm` = the CPU draws straight to HDMI (reliable on the Pi); `sdl` = SDL/pygame with GPU drawing |
 | `STATIC_POSITION` | `after` | Where your own images go: `after`, `before` or `spread` |
 
 Write settings as `NAME=value` on one line, with no quotes or spaces around `=` and comments on their
@@ -175,7 +176,7 @@ Troubleshooting and logging are covered in [USAGE.md](USAGE.md#logs-and-troubles
 ## Project layout
 
 ```
-empire-kiosk/
+cinema-kiosk/
 ├── README.md             this file
 ├── INSTALL.md            step-by-step Raspberry Pi installation
 ├── USAGE.md              running it: every setting, your own images, troubleshooting

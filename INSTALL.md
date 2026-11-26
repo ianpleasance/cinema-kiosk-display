@@ -31,8 +31,8 @@ Contents
 - **[computer]** means: run this on your own laptop or PC.
 - **[pi]** means: run this on the Pi, in an SSH session logged in as the `cinema` user.
 - Names used below, which you can change: hostname `foyer-kiosk`, user `cinema`, project folder
-  `/home/cinema/empire-kiosk` (the `.md` guides live there) and the application folder inside it,
-  `/home/cinema/empire-kiosk/cinema-kiosk`, where `docker-compose.yml` and `.env` are.
+  `/home/cinema/cinema-kiosk` (the `.md` guides live there) and the application folder inside it,
+  `/home/cinema/cinema-kiosk/cinema-kiosk`, where `docker-compose.yml` and `.env` are.
 - Only one account is used. `cinema` can use `sudo` (without a password, set up in step 4) and is the account
   that runs Docker and owns all the files, and the same name and password are used for the network shares.
 
@@ -215,6 +215,9 @@ cat /boot/firmware/cmdline.txt                # still one line, ending in the tw
 Pi 4 or 5). Use `HDMI-A-2` if the screen is on the second port. If the Pi won't start afterwards,
 put the card in your computer and restore `cmdline.txt.bak` over `cmdline.txt`.
 
+**A 4K TV is fine.** The `video=` setting makes the Pi send 1920x1080, which the TV scales up. The kiosk
+draws at 1080p, which is what the slides are made at, and a Pi 3B+ could not drive 4K smoothly anyway.
+
 **Hardware watchdog (recommended).** The Pi has a hardware watchdog: a timer that resets the board if the
 operating system stops responding. It is built into the kernel but **switched off until systemd is told to
 use it**. With it on, a frozen Pi restarts itself within seconds instead of staying stuck until someone
@@ -381,12 +384,12 @@ hasn't applied: log out and in again.
 
 ## 7. Get the code
 
-**[pi]** From Git (replace the address with your repository's):
+**[pi]** From Git:
 
 ```bash
 cd ~
-git clone <your-repo-url> empire-kiosk
-cd empire-kiosk/cinema-kiosk
+git clone https://github.com/ianpleasance/cinema-kiosk-display.git cinema-kiosk
+cd cinema-kiosk/cinema-kiosk
 ```
 
 For a private repository, make a read-only **deploy key** for the Pi: run
@@ -400,14 +403,14 @@ your repository's deploy keys, then clone using the `git@...` address.
 scp cinema-kiosk.tar.gz cinema@foyer-kiosk.local:~
 
 # [pi]
-mkdir -p ~/empire-kiosk && tar xzf ~/empire-kiosk/cinema-kiosk.tar.gz -C ~/empire-kiosk
-cd ~/empire-kiosk/cinema-kiosk
+mkdir -p ~/cinema-kiosk && tar xzf ~/cinema-kiosk.tar.gz -C ~/cinema-kiosk
+cd ~/cinema-kiosk/cinema-kiosk
 ```
 
-The tarball puts the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) in `~/empire-kiosk`
-and everything else in `~/empire-kiosk/cinema-kiosk`.
+The tarball puts the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) in `~/cinema-kiosk`
+and everything else in `~/cinema-kiosk/cinema-kiosk`.
 
-Everything from here is run from inside `~/empire-kiosk/cinema-kiosk`. Check that the folders the containers use are
+Everything from here is run from inside `~/cinema-kiosk/cinema-kiosk`. Check that the folders the containers use are
 there, and that the Pi's `cinema` user has the user ID the containers expect:
 
 ```bash
@@ -427,8 +430,8 @@ file sharing for Linux) and the same `cinema` user name and password.
 
 | Share | Folder on the Pi | What it's for |
 |---|---|---|
-| `static` | `~/empire-kiosk/cinema-kiosk/static` | **Your own images** (offers, house rules, sponsors). Add and remove them here. |
-| `slides` | `~/empire-kiosk/cinema-kiosk/slides` | The **rendered film slides** made by the updater (read it, or remove a slide you don't want). |
+| `static` | `~/cinema-kiosk/cinema-kiosk/static` | **Your own images** (offers, house rules, sponsors). Add and remove them here. |
+| `slides` | `~/cinema-kiosk/cinema-kiosk/slides` | The **rendered film slides** made by the updater (read it, or remove a slide you don't want). |
 
 1. **[pi]** Install Samba. If it asks about WINS settings from DHCP, answer **No**:
 
@@ -451,7 +454,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    [static]
       comment = Cinema kiosk - your own images
-      path = /home/cinema/empire-kiosk/cinema-kiosk/static
+      path = /home/cinema/cinema-kiosk/cinema-kiosk/static
       browseable = yes
       read only = no
       valid users = cinema
@@ -462,7 +465,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    [slides]
       comment = Cinema kiosk - rendered slides
-      path = /home/cinema/empire-kiosk/cinema-kiosk/slides
+      path = /home/cinema/cinema-kiosk/cinema-kiosk/slides
       browseable = yes
       read only = no
       valid users = cinema
@@ -475,7 +478,7 @@ file sharing for Linux) and the same `cinema` user name and password.
 
    Optionally, a third, **read-only** share for the slideshow video (see `VIDEO_MODE` in
    [USAGE.md](USAGE.md#slideshow-video)): the same lines with the heading `[video]`, `path =
-   /home/cinema/empire-kiosk/cinema-kiosk/video` and `read only = yes`.
+   /home/cinema/cinema-kiosk/cinema-kiosk/video` and `read only = yes`.
 
 4. **[pi]** Check the file for mistakes, then start Samba and have it start at every boot:
 
@@ -511,7 +514,7 @@ How it behaves:
 
 All settings are in one file, `.env`. It's a hidden file (its name starts with a dot); `ls -a` lists it.
 
-**[pi]**, in `~/empire-kiosk/cinema-kiosk`:
+**[pi]**, in `~/cinema-kiosk/cinema-kiosk`:
 
 ```bash
 nano .env
@@ -620,7 +623,7 @@ to *your* Tailscale account can reach the Pi.
 Read the [CHANGELOG](CHANGELOG.md) first, then **[pi]**:
 
 ```bash
-cd ~/empire-kiosk/cinema-kiosk
+cd ~/cinema-kiosk/cinema-kiosk
 cat VERSION                                  # the version you have now
 git pull --rebase --autostash                # your edits to .env are kept
 docker compose up -d --build
@@ -651,9 +654,11 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 | **`docker: permission denied`** | `cinema` isn't in the `docker` group yet, or you haven't logged in again since adding it ([step 6](#6-install-docker)). |
 | **The build is "Killed" or the Pi freezes** | Out of memory: add swap ([step 4](#4-set-up-the-base-system)) and run the build again. |
 | **Screen stays black but containers are "Up"** | Normal for the first few minutes until the first update completes. If it persists: `docker compose logs --tail 50`. If slides exist (`ls slides/current`) it's a display-driver problem: check `/dev/dri` exists, that you're on Raspberry Pi OS **Lite**, and that `dtoverlay=vc4-kms-v3d` is set, or uncomment `privileged: true` in `docker-compose.yml` and run `docker compose up -d`. |
+| **Screen stays black but the display log says `Display 1920x1080`** | Check `DISPLAY_BACKEND` in `.env` is `drm` (the default; it draws with the CPU and works on the Pi). The `sdl` setting uses GPU drawing, which gives a black screen on some Pis. Then `docker compose up -d --build`. |
+| **Screen stays black, and you want to know if the Pi, cable and TV are at fault** | Stop the display (`docker compose stop display`), then test the graphics without the kiosk software: `sudo apt install -y libdrm-tests`, then `sudo modetest -M vc4 -c` (note the number of the `connected` HDMI connector, usually `35`) and `sudo modetest -M vc4 -s 35:1920x1080`. Colour bars on the screen mean the Pi, cable and TV are fine; press Enter to finish and `docker compose up -d` to start the display again. No bars: try another HDMI input or cable, and check `/boot/firmware/config.txt` still has `dtoverlay=vc4-kms-v3d`. |
 | **`no such file or directory` for `/dev/dri`** | You're not on a Pi with KMS enabled (or you're on a PC or Chromebook). Start only the updater: `docker compose up -d updater`. |
 | **Can't open the network share** | Run `systemctl status smbd` and `testparm -s`. Check the user name is `cinema` and the password is the one set with `smbpasswd` (not necessarily the login password). Try the IP address instead of the name. On Windows, an old saved login can interfere: Credential Manager, remove the entry for the Pi. |
-| **Can open the share but can't save or delete files** | The folder's owner isn't `cinema` (if you ran `docker compose up` as `sudo`, or before the folders existed, Docker may have created them as root). Fix with `sudo chown -R cinema:cinema ~/empire-kiosk/cinema-kiosk/slides ~/empire-kiosk/cinema-kiosk/static ~/empire-kiosk/cinema-kiosk/logs ~/empire-kiosk/cinema-kiosk/video`, then `docker compose up -d`. |
+| **Can open the share but can't save or delete files** | The folder's owner isn't `cinema` (if you ran `docker compose up` as `sudo`, or before the folders existed, Docker may have created them as root). Fix with `sudo chown -R cinema:cinema ~/cinema-kiosk/cinema-kiosk/slides ~/cinema-kiosk/cinema-kiosk/static ~/cinema-kiosk/cinema-kiosk/logs ~/cinema-kiosk/cinema-kiosk/video`, then `docker compose up -d`. |
 | **Updater says `Permission denied` writing to `/data`, `/logs` or `/video`** | The same thing: those folders aren't writable by the user in `docker-compose.yml` (`1000:1000`). Run the `chown` above and check `id cinema`. |
 
 ## 15. Maintenance, backups and removal
@@ -663,7 +668,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 - **Refresh the container base images** now and then, to pick up security fixes:
 
   ```bash
-  cd ~/empire-kiosk/cinema-kiosk
+  cd ~/cinema-kiosk/cinema-kiosk
   docker compose build --pull
   docker compose up -d
   docker image prune -f
@@ -674,7 +679,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
   pre-made card.
 - **Back up what's yours**: `.env`, the `static` folder and the `fonts` folder. Everything else is
   rebuilt from the code and the website. (Easiest is to copy them off through the network shares, or with
-  `scp -r cinema@foyer-kiosk.local:~/empire-kiosk/cinema-kiosk/static .` from your computer.)
+  `scp -r cinema@foyer-kiosk.local:~/cinema-kiosk/cinema-kiosk/static .` from your computer.)
 - **Disk space**: the slides take a few MB per film and the updater keeps only the current and previous
   set. The `slides/archive` folder grows slowly and is never deleted automatically; see
   [USAGE.md](USAGE.md#rendered-slides-and-the-archive). Check space with `df -h /`, and
@@ -684,7 +689,7 @@ Problems once it's running are covered in [USAGE.md](USAGE.md#logs-and-troublesh
 are kept):
 
 ```bash
-cd ~/empire-kiosk/cinema-kiosk
+cd ~/cinema-kiosk/cinema-kiosk
 docker compose down
 rm -rf slides/gen-* slides/current slides/archive
 docker compose up -d --build        # the first update runs straight away
@@ -693,8 +698,8 @@ docker compose up -d --build        # the first update runs straight away
 **Removing the kiosk completely:**
 
 ```bash
-cd ~/empire-kiosk/cinema-kiosk && docker compose down --rmi all
-cd ~ && rm -rf empire-kiosk
+cd ~/cinema-kiosk/cinema-kiosk && docker compose down --rmi all
+cd ~ && rm -rf cinema-kiosk
 ```
 
 Then remove the two shares from `/etc/samba/smb.conf` (the `[static]` and `[slides]` blocks) and run

@@ -16,6 +16,12 @@ First release.
   Lite (64-bit) with Docker from its install script, and warns that the original Pi Zero, Zero W and
   Pi 1 (ARMv6) cannot run Docker. The updater image is built from Debian packages instead of pip, so it
   builds on 32-bit and 64-bit alike. The guide also sets up passwordless `sudo` for `cinema`.
+- **CPU display output** (`DISPLAY_BACKEND=drm`, the default): the display writes frames with the CPU into
+  plain KMS/DRM buffers and page-flips them, instead of using SDL's GPU drawing, which gave a black
+  screen on a Pi 3B+ (Mesa/vc4 inside the container drew nothing). `DISPLAY_BACKEND=sdl` keeps the old route.
+- **Install guide** now uses the repository `https://github.com/ianpleasance/cinema-kiosk-display`, clones it
+  to `~/cinema-kiosk` (application in `~/cinema-kiosk/cinema-kiosk`), and gains a graphics test with `modetest`
+  and a note on 4K TVs.
 - **Package layout**: the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) are at the top of
   the package and the application is in a `cinema-kiosk/` folder beside them.
 - **Several refresh times a day**: `RUN_AT` accepts a list such as `0330,1230,1530,2030`, so
