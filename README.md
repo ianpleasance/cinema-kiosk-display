@@ -1,8 +1,9 @@
-# Empire Theatre Foyer Kiosk
+# Cinema Foyer Kiosk display
 
 A self-updating digital poster display for a cinema foyer. It runs on a Raspberry Pi, outputs
 full-screen over HDMI, and shows a looping slideshow of what's on, built automatically every day
-from the theatre's own website.
+from the theatre's own website. The current codebase assumes a cinema running the Oscar theatre
+management software, and it was written for use in the Empire Theatre based in Halstead, Essex, UK.
 
 **Version 1.0.0** · see the [CHANGELOG](CHANGELOG.md) · [INSTALL.md](INSTALL.md) is the
 step-by-step Raspberry Pi setup · [USAGE.md](USAGE.md) covers running it and every setting
@@ -16,8 +17,9 @@ step-by-step Raspberry Pi setup · [USAGE.md](USAGE.md) covers running it and ev
 - **Reads the schedule** (daily, or at several times a day) from the [What's On page](https://empire-theatre.co.uk/EmpireTheatre.dll/WhatsOn):
   every film, event cinema, comedy night and so on, with its poster and all its showing dates.
 - **Builds a slide for each event**: the poster scaled to full height on the left, and on the right
-  a rating badge, the title and the dates and times (aligned in columns, in 12-hour or 24-hour
+  a rating badge, price, the title and the dates and times (aligned in columns, in 12-hour or 24-hour
   style), vertically centred. Optionally the original poster is kept as a slide of its own too.
+
 - **Shows them full screen** with a fade between slides, straight to HDMI. No desktop, browser or
   keyboard needed.
 - **Mixes in your own images** (house rules, offers, sponsors...) from a `static/` folder.
