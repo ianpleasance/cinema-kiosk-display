@@ -22,6 +22,13 @@ First release.
 - **Install guide** now uses the repository `https://github.com/ianpleasance/cinema-kiosk-display`, clones it
   to `~/cinema-kiosk` (application in `~/cinema-kiosk/cinema-kiosk`), and gains a graphics test with `modetest`
   and a note on 4K TVs.
+- **Date style** (`DATE_MODE`): dates on the slides are written with 1st, 2nd, 3rd, 4th (`Sat 21st Nov`) by
+  default; `plain` keeps `Sat 21 Nov`.
+- **Ticket price** (`SHOW_PRICE`): the info slide shows the price on the rating's row, to the right of the
+  rating circle (or in its place when there is no rating), when every ticket for the film costs the same.
+  Films with different prices (adult and child, several seating areas, or different showings) show none.
+  Prices are read from each price group's booking page, once per run, and a page that can't be read just
+  means no price.
 - **Package layout**: the guides (`README.md`, `INSTALL.md`, `USAGE.md`, `CHANGELOG.md`) are at the top of
   the package and the application is in a `cinema-kiosk/` folder beside them.
 - **Several refresh times a day**: `RUN_AT` accepts a list such as `0330,1230,1530,2030`, so

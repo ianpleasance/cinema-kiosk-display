@@ -111,6 +111,7 @@ with `docker compose exec updater python updater.py --once` (or wait for the nex
 | `MAX_ITEM_DROP` | `5` | Safety check: a refresh with more than this many fewer films than the last good one is rejected and the old images kept (`0` = off). See [Safety checks](#safety-checks-archive-and-the-log-file) |
 | `LOG_FILE` | `/logs/updater.log` | The updater's log file (appears in `logs/` on the host); `off` = console only |
 | `TIME_FORMAT` | `12h` | `12h` shows 7:30pm, `24h` shows 19:30 |
+| `DATE_MODE` | `ordinal` | `ordinal` writes dates as Sat 21st Nov, `plain` as Sat 21 Nov |
 | `LISTING_URL` | the What's On page | Where the schedule is read from |
 | `DAYS_AHEAD` | `0` | `0` = all events; `N` = only today plus the next N days |
 | `SAVE_POSTERS` | `1` | `1` = keep each poster and its info slide; `0` = info slides only |
@@ -123,6 +124,7 @@ with `docker compose exec updater python updater.py --once` (or wait for the nex
 | `BADGE_COLOUR` | `C8102E` | Rating circle |
 | `BADGE_TEXT_COLOUR` | `FFFFFF` | Text inside the rating circle |
 | `SHOW_RATING` | `1` | `0` hides the rating badge |
+| `SHOW_PRICE` | `1` | Shows the ticket price beside the rating badge when every ticket for the film costs the same; films with several prices show none. `0` never shows a price |
 | `POSTER_WIDTH_PERCENT` | `66.67` | Poster area as a percentage of the width (20 to 90) |
 | `TITLE_SIZE_MAX`, `TITLE_SIZE_MIN` | `88`, `40` | Title text size limits in pixels |
 | `DATE_SIZE_MAX`, `DATE_SIZE_MIN` | `56`, `30` | Dates text size limits in pixels |

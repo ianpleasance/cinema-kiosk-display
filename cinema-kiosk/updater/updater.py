@@ -21,6 +21,7 @@ import argparse
 import hashlib
 import io
 import json
+from decimal import Decimal
 import logging
 import mimetypes
 import os
@@ -106,6 +107,10 @@ TIME_FORMAT = env("TIME_FORMAT", "12h").lower()   # "12h" -> 7:30pm   "24h" -> 1
 if TIME_FORMAT not in ("12h", "24h"):
     warn(f"TIME_FORMAT={TIME_FORMAT!r} is not 12h or 24h - using 12h")
     TIME_FORMAT = "12h"
+DATE_MODE = env("DATE_MODE", "ordinal").lower()   # "ordinal" -> Sat 21st Nov   "plain" -> Sat 21 Nov
+if DATE_MODE not in ("ordinal", "plain"):
+    warn(f"DATE_MODE={DATE_MODE!r} is not ordinal or plain - using ordinal")
+    DATE_MODE = "ordinal"
 LISTING_URL = env(
     "LISTING_URL", "https://empire-theatre.co.uk/EmpireTheatre.dll/WhatsOn")
 DAYS_AHEAD = env_number("DAYS_AHEAD", 0, 0, 3650)   # 0 = all events; N = today + the next N days
@@ -169,6 +174,7 @@ BACKGROUND_COLOUR = env_colour("BACKGROUND_COLOUR", "000000")
 BADGE_COLOUR = env_colour("BADGE_COLOUR", "C8102E")
 BADGE_TEXT_COLOUR = env_colour("BADGE_TEXT_COLOUR", "FFFFFF")
 SHOW_RATING = env_bool("SHOW_RATING", True)
+SHOW_PRICE = env_bool("SHOW_PRICE", True)      # show the ticket price when every ticket costs the same
 POSTER_WIDTH_PERCENT = env_number("POSTER_WIDTH_PERCENT", 66.67, 20, 90)
 TITLE_SIZE_MAX = env_number("TITLE_SIZE_MAX", 88, 20, 300)
 TITLE_SIZE_MIN = env_number("TITLE_SIZE_MIN", 40, 12, 300)
@@ -193,6 +199,8 @@ class Film:
         self.image_url = image_url
         self.detail_url = detail_url
         self.showings = []        # list of (date_text, [time_text, ...])
+        self.price_pages = {}     # (price group, section) -> booking page that lists its ticket prices
+        self.price = ""           # e.g. "£5" when every ticket costs the same, otherwise ""
 
     def __repr__(self):
         return f"Film({self.id}, {self.title!r}, {len(self.showings)} dates)"
@@ -233,6 +241,7 @@ def parse_listing(html, base_url=LISTING_URL, today=None, days_ahead=None):
         film = Film(film_id, title, urljoin(base_url, image), detail,
                     parse_rating(ev.get("Rating")))
         film.showings = group_performances(ev.get("Performances") or [], today, last)
+        film.price_pages = price_pages(ev.get("Performances") or [], today, last, base_url)
         if ev.get("Performances") and not film.showings:
             out_of_window += 1                    # has showings, but none today onwards / within the window
             continue
@@ -281,18 +290,53 @@ def format_times(text):
     return re.sub(r"\b(\d{1,2}):(\d{2})\b", to_12h, text)
 
 
+def ordinal(n):
+    """1 -> 1st, 2 -> 2nd, 3 -> 3rd, 4 -> 4th, 11 -> 11th, 21 -> 21st, 22 -> 22nd ..."""
+    if 10 <= n % 100 <= 20:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+
+
+def format_date(text):
+    """Apply DATE_MODE: 'Sat 21 Nov' -> 'Sat 21st Nov' (ordinal) or unchanged (plain)."""
+    if DATE_MODE != "ordinal":
+        return text
+    return re.sub(r"\b(\d{1,2})(?=\s+[A-Za-z]{3})", lambda m: ordinal(int(m.group(1))), text, count=1)
+
+
+def _in_window(performances, today, last=None):
+    """Performances from `today` to `last` (inclusive), in date and time order."""
+    return sorted((p for p in performances
+                   if str(p.get("StartDate", "")) >= today
+                   and (last is None or str(p.get("StartDate", "")) <= last)),
+                  key=lambda p: (p.get("StartDate", ""), p.get("StartTime", "")))
+
+
+def price_pages(performances, today, last, base_url):
+    """The booking pages that list ticket prices for the showings we will show:
+    {(price group, section): url}, one page per price group and seating section."""
+    pages = {}
+    for p in _in_window(performances, today, last):
+        base = p.get("URL")
+        if not base:
+            continue
+        for sec in p.get("Sections") or []:
+            key = (sec.get("PriceGroupID"), sec.get("SectionID"))
+            if key not in pages and sec.get("SectionID") is not None:
+                url = re.sub(r"TcsSection_\d+", f"TcsSection_{sec['SectionID']}", base)
+                pages[key] = urljoin(base_url, url)
+    return pages
+
+
 def group_performances(performances, today, last=None):
     """[(ReadableDate, [times])] in date order, one entry per day.
     Days before `today` are dropped, and days after `last` (if given)."""
-    perfs = sorted((p for p in performances
-                    if str(p.get("StartDate", "")) >= today
-                    and (last is None or str(p.get("StartDate", "")) <= last)),
-                   key=lambda p: (p.get("StartDate", ""), p.get("StartTime", "")))
+    perfs = _in_window(performances, today, last)
     days, order = {}, []
     for p in perfs:
         key = p.get("StartDate")
         if key not in days:
-            days[key] = (clean_text(p.get("ReadableDate")) or key, [])
+            days[key] = (format_date(clean_text(p.get("ReadableDate"))) or key, [])
             order.append(key)
         t = format_times(clean_text(p.get("StartTimeAndNotes") or p.get("StartTime") or ""))
         if t:
@@ -313,8 +357,52 @@ def parse_showings(html):
         date_el = li.select_one(".date")
         times = [format_times(" ".join(t.get_text().split())) for t in li.select(".perf-time")]
         if date_el and times:
-            showings.append((" ".join(date_el.get_text().split()), times))
+            showings.append((format_date(" ".join(date_el.get_text().split())), times))
     return showings
+
+
+PRICE_RE = re.compile(r"£\s*(\d[\d,]*(?:\.\d{1,2})?)")
+
+
+def parse_prices(html):
+    """The distinct ticket prices on a booking page, e.g. {Decimal('5.00')}.
+
+    The ticket choices are links like `Adult (£5.00)` (the page writes the pound sign as
+    `&pound;`); other links with the same markup, such as "Clear or Cancel", have no price."""
+    prices = set()
+    for a in BeautifulSoup(html, "lxml").find_all("a", href=re.compile("AssignPersonType")):
+        m = PRICE_RE.search(a.get_text())
+        if m:
+            prices.add(Decimal(m.group(1).replace(",", "")))
+    return prices
+
+
+def format_price(amount):
+    """Decimal('5.00') -> '£5', Decimal('16.5') -> '£16.50', Decimal('0') -> 'Free'."""
+    if amount == 0:
+        return "Free"
+    return f"£{int(amount)}" if amount == amount.to_integral_value() else f"£{amount:.2f}"
+
+
+def film_price(session, film, cache):
+    """The price to show on a film's slide: the one price every ticket costs, or "" when tickets
+    cost different amounts (adult and child, several seating areas...) or it can't be found.
+    `cache` remembers each booking page, so a price group shared by many films is read once."""
+    if not SHOW_PRICE or not film.price_pages:
+        return ""
+    prices = set()
+    for key, url in film.price_pages.items():
+        if key not in cache:
+            time.sleep(REQUEST_DELAY)
+            try:
+                cache[key] = parse_prices(fetch(session, url).text)
+            except Exception as e:
+                log.warning("could not read ticket prices for %s: %s", film.title, e)
+                cache[key] = None
+        if cache[key] is None:
+            return ""                                 # unknown: better to show nothing than guess
+        prices |= cache[key]
+    return format_price(next(iter(prices))) if len(prices) == 1 else ""
 
 
 def describe_showings(showings):
@@ -414,16 +502,16 @@ def _badge_font(draw, text, diameter):
     return _font(FONT_BOLD, 20)
 
 
-def render_info_panel(width, height, title, showings, rating=""):
-    """Black panel: rating badge, title, divider and a two-column date/time table,
-    all in white, auto-sized to fit and centred vertically."""
+def render_info_panel(width, height, title, showings, rating="", price=""):
+    """Black panel: rating badge and price (one row), title, divider and a two-column date/time
+    table, all in white, auto-sized to fit and centred vertically."""
     panel = Image.new("RGB", (width, height), BACKGROUND_COLOUR)
     draw = ImageDraw.Draw(panel)
     pad, gap = 40, 36
     max_w = width - 2 * pad
     avail_h = height - 2 * pad
     badge_d = 104
-    badge_h = (badge_d + 30) if rating else 0
+    badge_h = (badge_d + 30) if (rating or price) else 0
 
     for title_size in _sizes(TITLE_SIZE_MAX, TITLE_SIZE_MIN):
         tf = _font(FONT_BOLD, title_size)
@@ -439,7 +527,7 @@ def render_info_panel(width, height, title, showings, rating=""):
             d_h = sum(max(1, len(l)) for _, l in rows) * int(date_size * 1.45)
             if badge_h + t_h + gap + d_h <= avail_h:
                 return _draw_panel(panel, draw, pad, rating, badge_d, tf, t_lines, title_size,
-                                   df, rows, col_x, date_size, gap)
+                                   df, rows, col_x, date_size, gap, price)
 
     # Lots of showings: fixed modest sizes, truncate with "+ N more dates".
     title_size, date_size = min(TITLE_SIZE_MAX, TITLE_SIZE_MIN + 4), DATE_SIZE_MIN
@@ -459,22 +547,30 @@ def render_info_panel(width, height, title, showings, rating=""):
     if len(keep) < len(rows):
         keep.append((f"+ {len(rows) - len(keep)} more dates", []))
     return _draw_panel(panel, draw, pad, rating, badge_d, tf, t_lines, title_size,
-                       df, keep, col_x, date_size, gap)
+                       df, keep, col_x, date_size, gap, price)
 
 
 def _draw_panel(panel, draw, pad, rating, badge_d, tf, t_lines, title_size,
-                df, rows, col_x, date_size, gap):
+                df, rows, col_x, date_size, gap, price=""):
     t_step, d_step = int(title_size * 1.2), int(date_size * 1.45)
-    badge_h = (badge_d + 30) if rating else 0
+    badge_h = (badge_d + 30) if (rating or price) else 0
     d_h = sum(max(1, len(l)) for _, l in rows) * d_step
     block_h = badge_h + len(t_lines) * t_step + gap + d_h
     y = max(pad, (panel.height - block_h) // 2)
 
+    x = pad
     if rating:                                        # white text in a red circle
         draw.ellipse([pad, y, pad + badge_d, y + badge_d], fill=BADGE_COLOUR)
         bf = _badge_font(draw, rating, badge_d)
         draw.text((pad + badge_d / 2, y + badge_d / 2), rating, font=bf, fill=BADGE_TEXT_COLOUR, anchor="mm")
-        y += badge_h
+        x = pad + badge_d + 36
+    if price:                                         # on the rating's row, to its right (or in its place)
+        for size in range(72, 27, -4):
+            pf = _font(FONT_BOLD, size)
+            if x + draw.textlength(price, font=pf) <= panel.width - pad:
+                break
+        draw.text((x, y + badge_d / 2), price, font=pf, fill=TEXT_COLOUR, anchor="lm")
+    y += badge_h
 
     for line in t_lines:
         draw.text((pad, y), line, font=tf, fill=TEXT_COLOUR)
@@ -499,7 +595,7 @@ def _to_rgb_on_background(img):
     return img.convert("RGB")
 
 
-def compose_slide(poster_bytes, title, showings, rating="", w=SCREEN_W, h=SCREEN_H):
+def compose_slide(poster_bytes, title, showings, rating="", w=SCREEN_W, h=SCREEN_H, price=""):
     """Slide: poster on the left (POSTER_WIDTH_PERCENT of the width, full height, background-
     coloured edges), title / rating / dates on the right."""
     left_w = round(w * POSTER_WIDTH_PERCENT / 100)
@@ -509,7 +605,8 @@ def compose_slide(poster_bytes, title, showings, rating="", w=SCREEN_W, h=SCREEN
     poster = poster.resize(new_size, Image.LANCZOS)
     canvas = Image.new("RGB", (w, h), BACKGROUND_COLOUR)
     canvas.paste(poster, ((left_w - new_size[0]) // 2, (h - new_size[1]) // 2))
-    canvas.paste(render_info_panel(w - left_w, h, title, showings, rating if SHOW_RATING else ""), (left_w, 0))
+    canvas.paste(render_info_panel(w - left_w, h, title, showings, rating if SHOW_RATING else "",
+                                          price if SHOW_PRICE else ""), (left_w, 0))
     return canvas
 
 
@@ -590,6 +687,7 @@ def build_generation(session, out_dir, previous_count=None):
 
     written = []
     total = len(films)
+    price_cache = {}                                    # booking pages already read this run
     for n, film in enumerate(films, 1):
         log.info("(%d/%d) Retrieving %s", n, total, film.title)
         try:
@@ -600,7 +698,8 @@ def build_generation(session, out_dir, previous_count=None):
             img_resp = fetch(session, film.image_url)
             base = f"{n:02d}_{slugify(film.title)}"
             ext = image_ext(film.image_url, img_resp.headers.get("Content-Type"))
-            slide = compose_slide(img_resp.content, film.title, film.showings, film.rating)
+            film.price = film_price(session, film, price_cache)
+            slide = compose_slide(img_resp.content, film.title, film.showings, film.rating, price=film.price)
             entry = film_key(film)
             entry["files"] = []
             if SAVE_POSTERS:
@@ -612,7 +711,8 @@ def build_generation(session, out_dir, previous_count=None):
             slide.save(os.path.join(out_dir, name), quality=92)
             entry["files"].append(name)
             written.append(entry)
-            log.info("(%d/%d) Done: %s", n, total, describe_showings(film.showings))
+            log.info("(%d/%d) Done: %s%s", n, total, describe_showings(film.showings),
+                     f" - price {film.price}" if film.price else "")
         except Exception as e:                      # one bad film must not sink the run
             log.warning("(%d/%d) Skipped %s: %s", n, total, film.title, e)
     if not written:

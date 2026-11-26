@@ -9,7 +9,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "updater"))
 import updater  # noqa: E402
-from test_updater import LISTING, DETAIL, jpeg  # noqa: E402
+from test_updater import LISTING, DETAIL, BOOKING, jpeg  # noqa: E402
 
 
 class Resp:
@@ -25,6 +25,8 @@ def make_fetch(fail=False):
             return Resp(text=LISTING)
         if "?f=" in url:
             return Resp(text=DETAIL)
+        if "Booking" in url:
+            return Resp(text=BOOKING)
         return Resp(content=jpeg(600, 900, (10, 60, 120)), ctype="image/jpeg")
     return fake
 

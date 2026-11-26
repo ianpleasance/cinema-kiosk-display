@@ -107,7 +107,7 @@ Which settings need the extra refresh:
 |---|---|
 | `HOLD_SECONDS`, `FADE_SECONDS`, `FADE_MODE`, `SHUFFLE`, `STATIC_POSITION`, `DISPLAY_BACKEND` | `up -d` only |
 | `RUN_AT`, `TZ`, `RETRY_MINUTES`, `REQUEST_DELAY`, `MAX_ITEM_DROP`, `LOG_FILE` | `up -d` only; the updater then waits for the next time |
-| Anything about how slides look: colours, fonts, text sizes, `POSTER_WIDTH_PERCENT`, `SHOW_RATING`, `TIME_FORMAT`, `SAVE_POSTERS`, `SCREEN_W`, `SCREEN_H` | `up -d`, then refresh |
+| Anything about how slides look: colours, fonts, text sizes, `POSTER_WIDTH_PERCENT`, `SHOW_RATING`, `SHOW_PRICE`, `DATE_MODE`, `TIME_FORMAT`, `SAVE_POSTERS`, `SCREEN_W`, `SCREEN_H` | `up -d`, then refresh |
 | `BACKGROUND_COLOUR` | `up -d`, then refresh (it changes the slides and the display) |
 | What's included: `DAYS_AHEAD`, `LISTING_URL` | `up -d`, then refresh |
 | `VIDEO_MODE` | `up -d`; the updater checks the video when it restarts. Run a refresh to make it sooner |
@@ -135,6 +135,7 @@ Every setting is in `.env`, with a comment above it. "Applies" shows what's need
 | `LISTING_URL` | the What's On page | a web address | Where the schedule is read from |
 | `DAYS_AHEAD` | `0` | `0` to `3650` | `0` shows every event on the schedule; `N` shows only today plus the next `N` days |
 | `TIME_FORMAT` | `12h` | `12h` or `24h` | `12h` writes 7:30pm, `24h` writes 19:30 |
+| `DATE_MODE` | `ordinal` | `ordinal` or `plain` | `ordinal` writes dates with 1st, 2nd, 3rd, 4th (Sat 21st Nov); `plain` writes Sat 21 Nov |
 | `SAVE_POSTERS` | `1` | `1` or `0` | `1` keeps each original poster *and* the info slide (the poster shows first, then the info slide); `0` keeps only the info slides |
 | `RETRY_MINUTES` | `30` | `1` or more | How long to wait before trying again after a failed refresh |
 | `REQUEST_DELAY` | `0.5` | `0` or more | Seconds to pause between requests to the website, to be polite |
@@ -149,6 +150,7 @@ Every setting is in `.env`, with a comment above it. "Applies" shows what's need
 | `BADGE_COLOUR` | `C8102E` | hex | The rating circle |
 | `BADGE_TEXT_COLOUR` | `FFFFFF` | hex | The text inside the rating circle |
 | `SHOW_RATING` | `1` | `1` or `0` | `0` hides the rating circle |
+| `SHOW_PRICE` | `1` | `1` or `0` | `1` shows the ticket price on the rating's row (to the right of the circle, or in its place if the film has no rating) when every ticket for the film, in every showing shown, costs the same. If adult and child tickets, seating areas or showings are priced differently, no price is shown. A price of nothing shows as Free. `0` never shows a price |
 | `POSTER_WIDTH_PERCENT` | `66.67` | `20` to `90` | How much of the screen's width the poster gets; the text panel gets the rest. `66.67` is two thirds |
 | `TITLE_SIZE_MAX`, `TITLE_SIZE_MIN` | `88`, `40` | `20`-`300`, `12`-`300` | Title text size in pixels (on a 1080-high slide). The largest size that fits is used, shrinking towards the minimum for long titles |
 | `DATE_SIZE_MAX`, `DATE_SIZE_MIN` | `56`, `30` | `12`-`200` | The same, for the dates and times |

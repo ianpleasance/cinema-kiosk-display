@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "updater"))
 import updater  # noqa: E402
 
 DEFAULT_TIME_FORMAT = updater.TIME_FORMAT        # value before any test changes it
+updater.DATE_MODE = "plain"                      # most tests expect 'Sat 28 Nov'; the ordinal ones switch it
 
 import json as _json
 
@@ -336,6 +337,155 @@ def test_compose():
     return out
 
 
+# ------------------------------------------------------------ dates and prices
+def test_date_mode():
+    assert [updater.ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 30, 31)] == \
+        ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "30th", "31st"]
+    try:
+        updater.DATE_MODE = "ordinal"
+        f = updater.format_date
+        assert f("Sat 21 Nov") == "Sat 21st Nov"
+        assert f("Wed 2 Dec") == "Wed 2nd Dec"
+        assert f("Thu 19 Dec") == "Thu 19th Dec"
+        assert f("Sat 11 Jan") == "Sat 11th Jan"
+        assert f("Wednesday 25 Nov") == "Wednesday 25th Nov"
+        assert f("2026-11-28") == "2026-11-28"                       # an ISO fallback is left alone
+        assert f("Doors 7pm") == "Doors 7pm"
+        films = updater.parse_listing(LISTING, today="2099-11-27")
+        assert [d for d, _ in films[0].showings] == ["Sat 28th Nov", "Wed 2nd Dec"]
+        assert updater.parse_showings(DETAIL)[0][0] == "Sat 28th Nov"      # the fallback page too
+        updater.DATE_MODE = "plain"
+        assert f("Sat 21 Nov") == "Sat 21 Nov"
+        assert [d for d, _ in updater.parse_listing(LISTING, today="2099-11-27")[0].showings] == ["Sat 28 Nov", "Wed 2 Dec"]
+    finally:
+        updater.DATE_MODE = "plain"
+    assert os.environ.get("DATE_MODE") is None                      # and the default (no setting) is ordinal
+    import subprocess
+    out = subprocess.run([sys.executable, "-I", "-c",
+                          "import sys; sys.path.insert(0, %r); import updater; print(updater.DATE_MODE)"
+                          % os.path.join(os.path.dirname(__file__), "..", "updater")],
+                         capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "")}).stdout.strip()
+    assert out == "ordinal", out
+
+
+BOOKING = """
+<html><body><h2>Wicker (15)</h2>
+<p>Choose Seats</p>
+<div><b>STANDARD</b><ul>
+ <li><a href="javascript:AssignPersonType('284', '286', '500')">Adult (&pound;5.00)</a></li>
+ <li><a href="javascript:AssignPersonType('284', '287', '500')">Child (&pound;5.00)</a></li></ul>
+<b>WHEELCHAIR</b><ul>
+ <li><a href="javascript:AssignPersonType('285', '286', '500')">Adult (&pound;5.00)</a></li></ul>
+<a href="javascript:AssignPersonType('0', '0', '0')">Clear or Cancel</a>
+<a href="/EmpireTheatre.dll/Account">Log In (&pound;99 membership)</a></div></body></html>
+"""
+BOOKING_MIXED = BOOKING.replace("Child (&pound;5.00)", "Child (&pound;3.50)")
+
+
+def test_parse_prices_and_format():
+    from decimal import Decimal as D
+    assert updater.parse_prices(BOOKING) == {D("5.00")}              # repeated, "Clear" and non-ticket links ignored
+    assert updater.parse_prices(BOOKING_MIXED) == {D("5.00"), D("3.50")}
+    assert updater.parse_prices("<html>sold out</html>") == set()
+    assert updater.parse_prices("<a href=\"javascript:AssignPersonType(1)\">Adult (&pound;1,250.00)</a>") == {D("1250.00")}
+    fp = updater.format_price
+    assert fp(D("5.00")) == "£5" and fp(D("16.50")) == "£16.50" and fp(D("12.5")) == "£12.50"
+    assert fp(D("0.00")) == "Free" and fp(D("30")) == "£30" and fp(D("0.99")) == "£0.99"
+
+
+def _perf_with_sections(pid, date, sections):
+    return {"ID": pid, "StartDate": date, "ReadableDate": "x", "StartTimeAndNotes": "19:30", "StartTime": "1930",
+            "URL": f"Booking?Booking=TSelectItems.TcsPerformance_{pid}.TcsSection_840",
+            "Sections": [{"SectionID": s, "PriceGroupID": g} for s, g in sections]}
+
+
+def test_price_pages():
+    perfs = [_perf_with_sections(1, "2099-11-28", [(840, 6806)]),
+             _perf_with_sections(2, "2099-12-02", [(840, 6806)]),                 # same group: one page
+             _perf_with_sections(3, "2099-12-03", [(840, 292), (651371, 292)]),    # two sections: two pages
+             _perf_with_sections(4, "2000-01-01", [(840, 9999)])]                  # in the past: ignored
+    pages = updater.price_pages(perfs, "2099-11-27", None, "https://x.test/Empire.dll/WhatsOn")
+    assert list(pages) == [(6806, 840), (292, 840), (292, 651371)]
+    assert pages[(6806, 840)] == "https://x.test/Empire.dll/Booking?Booking=TSelectItems.TcsPerformance_1.TcsSection_840"
+    assert pages[(292, 651371)].endswith("TcsPerformance_3.TcsSection_651371")  # the right section's page
+    assert updater.price_pages([{"ID": 1, "StartDate": "2099-11-28", "Sections": [{"SectionID": 1}]}],
+                               "2099-11-27", None, "https://x.test/") == {}      # no booking link: nothing to read
+
+
+def test_film_price_rules():
+    calls = []
+    pages = {"a": BOOKING, "b": BOOKING, "mixed": BOOKING_MIXED,
+             "free": BOOKING.replace("&pound;5.00", "&pound;0.00"), "closed": "<html>no tickets</html>"}
+    real_fetch, real_delay, real_show = updater.fetch, updater.REQUEST_DELAY, updater.SHOW_PRICE
+
+    def fake(session, url, **kw):
+        calls.append(url)
+        if url == "boom":
+            raise RuntimeError("down")
+        return type("R", (), {"text": pages[url]})()
+    updater.fetch, updater.REQUEST_DELAY = fake, 0
+    try:
+        def film(*urls):
+            f = updater.Film("1", "T", "i", "d")
+            f.price_pages = {(i, 1): u for i, u in enumerate(urls)}
+            return f
+        cache = {}
+        assert updater.film_price(None, film("a"), cache) == "£5"                 # one price
+        assert updater.film_price(None, film("a", "b"), {}) == "£5"               # two pages, same price
+        assert updater.film_price(None, film("mixed"), {}) == ""                  # adult and child differ
+        assert updater.film_price(None, film("a", "mixed"), {}) == ""
+        assert updater.film_price(None, film("free"), {}) == "Free"
+        assert updater.film_price(None, film("closed"), {}) == ""                 # nothing found
+        assert updater.film_price(None, film("a", "closed"), {}) == "£5"         # a page without prices is skipped
+        assert updater.film_price(None, film("a", "boom"), {}) == ""              # can't read one: show nothing
+        assert updater.film_price(None, updater.Film("1", "T", "i", "d"), {}) == ""   # no booking pages
+        calls.clear()
+        shared = {}
+        updater.film_price(None, film("a"), shared)
+        updater.film_price(None, film("a"), shared)                               # cached: not fetched twice
+        assert calls == ["a"]
+        updater.SHOW_PRICE = False
+        calls.clear()
+        assert updater.film_price(None, film("a"), {}) == "" and calls == []      # switched off: no requests
+    finally:
+        updater.fetch, updater.REQUEST_DELAY, updater.SHOW_PRICE = real_fetch, real_delay, real_show
+
+
+def test_price_on_the_slide():
+    shows = [("Fri 27 Nov", ["7:30pm"])]
+
+    def red(im):
+        return any(r > 150 and g < 60 for r, g, b in im.crop((30, 330, 220, 500)).getdata())
+    def light(im, box):
+        return sum(1 for p in im.crop(box).get_flattened_data() if sum(p) > 600) if hasattr(im, 'get_flattened_data') else sum(1 for p in im.crop(box).getdata() if sum(p) > 600)
+    rating_only = updater.render_info_panel(640, 1080, "Wicker", shows, "15")
+    both = updater.render_info_panel(640, 1080, "Wicker", shows, "15", "£5")
+    price_only = updater.render_info_panel(640, 1080, "Wicker", shows, "", "£5")
+    plain = updater.render_info_panel(640, 1080, "Wicker", shows)
+    assert red(rating_only) and red(both) and not red(price_only) and not red(plain)
+    # the price sits to the right of the circle, on the same row
+    assert light(both, (180, 330, 620, 500)) > light(rating_only, (180, 330, 620, 500)) + 100
+    # with no rating it takes the rating's place at the left edge
+    def top(im):                       # first row with text, i.e. the top of the block
+        return next(y for y in range(im.height) if light(im, (0, y, im.width, y + 1)))
+    assert top(price_only) < top(plain) - 40                             # the price row makes the block taller
+    assert light(price_only, (30, top(price_only), 300, top(price_only) + 100)) > 100   # price at the left edge
+    # a price makes room for its row, and the long price still fits the panel
+    wide = updater.render_info_panel(640, 1080, "Wicker", shows, "12A", "£1,250.50")
+    assert light(wide, (180, 330, 640, 500)) > 100
+    # SHOW_PRICE=0 hides it on a finished slide
+    poster = jpeg(600, 900, (30, 90, 160))
+    on = updater.compose_slide(poster, "Wicker", shows, "15", price="£5")
+    old = updater.SHOW_PRICE
+    try:
+        updater.SHOW_PRICE = False
+        off = updater.compose_slide(poster, "Wicker", shows, "15", price="£5")
+    finally:
+        updater.SHOW_PRICE = old
+    assert on.tobytes() != off.tobytes()
+    assert off.tobytes() == updater.compose_slide(poster, "Wicker", shows, "15").tobytes()
+
+
 if __name__ == "__main__":
     test_clean_text()
     test_wrap_breaks()
@@ -351,6 +501,11 @@ if __name__ == "__main__":
     test_days_ahead()
     test_parse_rating()
     test_times_align_and_badge()
+    test_date_mode()
+    test_parse_prices_and_format()
+    test_price_pages()
+    test_film_price_rules()
+    test_price_on_the_slide()
     print("parse ok")
     test_compose()
     print("compose ok")
